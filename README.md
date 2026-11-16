@@ -4,7 +4,8 @@
 > **Team Name:** FLUXDCE | **Team ID:** 199409 | **Category:** Software | **Institution:** Dronacharya College of Engineering (DCE)
 
 [![Demo Video](https://img.shields.io/badge/Demo_Video-Watch_on_YouTube-red?style=for-the-badge&logo=youtube)](https://youtu.be/_q_NSYcsIc8?si=9OHKo1z36eukq9Sj)
-[![Live Website](https://img.shields.io/badge/Live_Website-Visit_Portal-success?style=for-the-badge&logo=githubpages&logoColor=white)](https://soul-ninja.github.io/fdr-shield/)
+[![Live Website](https://img.shields.io/badge/Live_Website-Visit_Portal-46E3B7?style=for-the-badge&logo=render&logoColor=black)](https://fdr-shield.onrender.com)
+[![API Health](https://img.shields.io/badge/API_Status-Operational-blue?style=for-the-badge&logo=render&logoColor=white)](https://fdr-shield-backend.onrender.com/api/health)
 [![SIH Problem Statement](https://img.shields.io/badge/SIH_2026-PS_26265-orange?style=for-the-badge)](https://sih.gov.in)
 
 ---
