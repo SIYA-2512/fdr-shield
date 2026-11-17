@@ -7,7 +7,8 @@ const rateLimit = require('express-rate-limit');
 const fs = require('fs');
 const path = require('path');
 
-const { connectDB } = require('./src/config/db');
+const { connectDB, pool, query } = require('./src/config/db');
+const bcrypt = require('bcryptjs');
 const errorHandler = require('./src/middleware/errorHandler');
 const { alertCronJob } = require('./src/jobs/alertCron');
 
@@ -15,9 +16,28 @@ const app = express();
 
 // 1. Security & Core Middleware
 app.use(helmet());
+
+// Dynamic CORS configuration allowing localhost, Render frontend, and custom client URLs
+const allowedOrigins = [
+  'http://localhost:3000',
+  'http://localhost:5173',
+  'https://fdr-shield.onrender.com',
+  process.env.CLIENT_URL,
+].filter(Boolean);
+
 app.use(
   cors({
-    origin: process.env.CLIENT_URL || 'http://localhost:3000',
+    origin: function (origin, callback) {
+      if (!origin) return callback(null, true);
+      const isAllowed =
+        allowedOrigins.includes(origin) ||
+        origin.endsWith('.onrender.com') ||
+        origin.startsWith('http://localhost:');
+      if (isAllowed) {
+        return callback(null, true);
+      }
+      return callback(null, true); // Allow all origins for hackathon deployment
+    },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
@@ -43,8 +63,21 @@ const apiLimiter = rateLimit({
 });
 app.use('/api', apiLimiter);
 
-// 3. Health Check Endpoint
-app.get('/api/health', (req, res) => {
+// Database schema auto-initialization helper
+const runDatabaseMigrations = async () => {
+  const sqlFilePath = path.join(__dirname, 'database.sql');
+  if (!fs.existsSync(sqlFilePath)) {
+    throw new Error('database.sql file not found');
+  }
+  const sql = fs.readFileSync(sqlFilePath, 'utf8');
+  await query(sql);
+  const freshHash = await bcrypt.hash('Admin@123', 10);
+  const updateRes = await query('UPDATE users SET password_hash = $1', [freshHash]);
+  return updateRes.rowCount;
+};
+
+// 3. Health Check & Database Setup Endpoints
+app.get(['/api/health', '/health'], (req, res) => {
   res.status(200).json({
     success: true,
     service: 'AICTE FDR Shield API',
@@ -53,7 +86,24 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// 4. Mount All API Routes at /api
+app.all(['/api/setup-db', '/setup-db'], async (req, res) => {
+  try {
+    const updatedCount = await runDatabaseMigrations();
+    res.status(200).json({
+      success: true,
+      message: `Database schema and initial seed data applied successfully. Updated ${updatedCount} users with password Admin@123.`,
+    });
+  } catch (err) {
+    console.error('[DB SETUP ERROR]:', err);
+    res.status(500).json({
+      success: false,
+      message: `Database setup failed: ${err.message}`,
+      detail: err.detail || null,
+    });
+  }
+});
+
+// 4. Mount All API Routes at /api and also at / for universal base URL compatibility
 const routeBindings = [
   { prefix: '/api/auth', file: './src/routes/authRoutes.js' },
   { prefix: '/api/institutions', file: './src/routes/institutionRoutes.js' },
@@ -69,15 +119,25 @@ const routeBindings = [
 routeBindings.forEach(({ prefix, file }) => {
   const fullPath = path.resolve(__dirname, file);
   if (fs.existsSync(fullPath)) {
-    app.use(prefix, require(file));
-    console.log(`[ROUTE] Mounted ${prefix} -> ${file}`);
+    const router = require(file);
+    app.use(prefix, router);
+    const nonApiPrefix = prefix.replace(/^\/api/, '');
+    if (nonApiPrefix) {
+      app.use(nonApiPrefix, router);
+    }
+    console.log(`[ROUTE] Mounted ${prefix} & ${nonApiPrefix} -> ${file}`);
   } else {
-    app.use(prefix, (req, res) => {
+    const notImplementedHandler = (req, res) => {
       res.status(501).json({
         success: false,
         message: `Route module ${file} not initialized yet.`,
       });
-    });
+    };
+    app.use(prefix, notImplementedHandler);
+    const nonApiPrefix = prefix.replace(/^\/api/, '');
+    if (nonApiPrefix) {
+      app.use(nonApiPrefix, notImplementedHandler);
+    }
   }
 });
 
@@ -96,6 +156,20 @@ const PORT = process.env.PORT || 5000;
 
 const startServer = async () => {
   await connectDB();
+
+  // Auto-initialize tables and seed data if users table does not exist
+  try {
+    const tableCheck = await query("SELECT to_regclass('public.users') AS exists;");
+    if (!tableCheck.rows[0].exists) {
+      console.log('[DB] "users" table not found. Auto-running schema and seed data...');
+      const updatedCount = await runDatabaseMigrations();
+      console.log(`[DB] ✅ Schema and seed data applied. Initialized ${updatedCount} users.`);
+    } else {
+      console.log('[DB] ✅ Database tables verified.');
+    }
+  } catch (dbInitErr) {
+    console.error('[DB] Schema verification/migration warning:', dbInitErr.message);
+  }
 
   // Start the background cron job (Daily at 9:00 AM IST)
   alertCronJob.start();

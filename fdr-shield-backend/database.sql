@@ -22,7 +22,7 @@ DROP TYPE IF EXISTS user_role_enum CASCADE;
 DROP TYPE IF EXISTS institution_status_enum CASCADE;
 DROP TYPE IF EXISTS fdr_validity_status_enum CASCADE;
 DROP TYPE IF EXISTS fdr_verification_status_enum CASCADE;
-DROP TABLE;
+DROP TABLE IF EXISTS release_requests CASCADE;
 DROP TYPE IF EXISTS fdr_admin_status_enum CASCADE;
 DROP TYPE IF EXISTS alert_type_enum CASCADE;
 DROP TYPE IF EXISTS alert_status_enum CASCADE;

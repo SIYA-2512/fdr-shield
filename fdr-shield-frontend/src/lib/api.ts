@@ -1,7 +1,17 @@
 import axios from 'axios';
 
+const rawBaseUrl =
+  import.meta.env.VITE_API_BASE_URL ||
+  (import.meta.env.PROD ? 'https://fdr-shield-backend.onrender.com/api' : '/api');
+
+const cleanBaseUrl = rawBaseUrl.replace(/\/+$/, '');
+const baseURL =
+  cleanBaseUrl.startsWith('http') && !cleanBaseUrl.endsWith('/api')
+    ? `${cleanBaseUrl}/api`
+    : cleanBaseUrl || '/api';
+
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || '/api',
+  baseURL,
   headers: {
     'Content-Type': 'application/json',
   },
